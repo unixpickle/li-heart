@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"math/rand"
 	"os"
 
 	"github.com/unixpickle/essentials"
@@ -14,29 +15,30 @@ const ErrorMargin = 0.01
 
 func main() {
 	sun := render3d.NewSphereAreaLight(
-		&model3d.Sphere{Center: model3d.XYZ(4, -4, 8), Radius: 0.8},
-		render3d.NewColor(30.0),
+		&model3d.Sphere{Center: model3d.XYZ(4, -4, 8), Radius: 2.0},
+		render3d.NewColor(60.0),
 	)
 	groundLight := render3d.NewMeshAreaLight(
 		model3d.NewMeshRect(model3d.XYZ(-5, -5, -10), model3d.XYZ(5, 5, -9.9)),
-		render3d.NewColor(1.0),
+		render3d.NewColor(2.0),
 	)
 	skyLight := render3d.NewMeshAreaLight(
-		model3d.NewMeshRect(model3d.XYZ(-5, -5, 10), model3d.XYZ(5, 5, 10.1)),
-		render3d.NewColor(1.0),
+		model3d.NewMeshRect(model3d.XYZ(-10, -5, 40), model3d.XYZ(10, 50, 40.1)),
+		render3d.NewColor(10.0),
 	)
 	sideLights := render3d.JoinAreaLights(
 		render3d.NewMeshAreaLight(
 			model3d.NewMeshRect(model3d.XYZ(-5, -5, -5), model3d.XYZ(-4.9, -1, 5)),
-			render3d.NewColor(0.3),
+			render3d.NewColor(0.6),
 		),
 		render3d.NewMeshAreaLight(
 			model3d.NewMeshRect(model3d.XYZ(4.9, -5, -5), model3d.XYZ(5.0, -1, 5)),
-			render3d.NewColor(0.3),
+			render3d.NewColor(0.6),
 		),
 	)
 	scene := render3d.JoinedObject{
-		NewHeart(),
+		HeartObject(),
+		GroundObject(),
 		sun,
 		groundLight,
 		skyLight,
@@ -44,7 +46,7 @@ func main() {
 	}
 
 	renderer := render3d.BidirPathTracer{
-		Camera: render3d.NewCameraAt(model3d.Coord3D{Y: -5, Z: 2},
+		Camera: render3d.NewCameraAt(model3d.Coord3D{Y: -7, Z: 2},
 			model3d.Coord3D{Y: 0, Z: 2}, math.Pi/3.6),
 		Light: render3d.JoinAreaLights(sun, groundLight, skyLight, sideLights),
 
@@ -83,32 +85,94 @@ func main() {
 
 	fmt.Println("Ray variance:", renderer.RayVariance(scene, 200, 200, 5))
 
-	img := render3d.NewImage(200, 200)
+	img := render3d.NewImage(600, 600)
 	renderer.Render(img, scene)
 	fmt.Println()
 	img.Save("output.png")
 }
 
-func NewHeart() render3d.Object {
+func HeartObject() render3d.Object {
 	f, err := os.Open("../create_mesh/heart.stl")
 	essentials.Must(err)
 	defer f.Close()
 	tris, err := model3d.ReadSTL(f)
 	essentials.Must(err)
 	mesh := model3d.NewMeshTriangles(tris)
+	mesh = mesh.SmoothAreas(0.05, 10)
 	mesh = mesh.Rotate(model3d.X(1), -math.Pi/2).Translate(model3d.Z(2))
 
+	collider := model3d.MeshToCollider(mesh)
+
 	obj := &render3d.ColliderObject{
-		Collider: model3d.MeshToCollider(mesh),
-		Material: &render3d.RefractMaterial{
-			IndexOfRefraction: 1.4,
-			RefractColor:      render3d.NewColor(1.0),
-			SpecularColor:     render3d.NewColor(1.0),
+		Collider: collider,
+		Material: &render3d.JoinedMaterial{
+			Materials: []render3d.Material{
+				&render3d.RefractMaterial{
+					IndexOfRefraction: 1.3,
+					RefractColor:      render3d.NewColor(0.95),
+				},
+				&render3d.PhongMaterial{
+					Alpha:         100.0,
+					SpecularColor: render3d.NewColor(0.05),
+				},
+			},
+			Probs: []float64{0.8, 0.2},
 		},
-		// Material: &render3d.LambertMaterial{
-		// 	DiffuseColor: render3d.NewColor(1.0),
-		// 	AmbientColor: render3d.NewColor(0.1),
-		// },
 	}
-	return obj
+
+	flakes := Flakes(collider)
+
+	return render3d.JoinedObject{obj, flakes}
+}
+
+func Flakes(container model3d.Collider) render3d.Object {
+	solid := model3d.NewColliderSolid(container)
+	mesh := model3d.NewMesh()
+	for i := 0; i < 10000; i++ {
+		point := model3d.NewCoord3DRandBounds(container.Min(), container.Max())
+		if !solid.Contains(point) || container.SphereCollision(point, 0.1) {
+			continue
+		}
+		size := model3d.XYZ(0.03, 0.03, 0.005)
+		flake := model3d.NewMeshRect(size.Scale(-1), size)
+		flake = flake.Rotate(model3d.NewCoord3DRandUnit(), rand.Float64()*math.Pi/2)
+		flake = flake.Translate(point)
+		mesh.AddMesh(flake)
+	}
+	return &render3d.ColliderObject{
+		Collider: model3d.MeshToCollider(mesh),
+		Material: &render3d.PhongMaterial{
+			Alpha:         100.0,
+			SpecularColor: render3d.NewColorRGB(1.0, 0.85, 0).Scale(0.5),
+			DiffuseColor:  render3d.NewColorRGB(1.0, 0.85, 0).Scale(0.3),
+		},
+	}
+}
+
+func GroundObject() render3d.Object {
+	return render3d.JoinedObject{
+		// Sky
+		&render3d.ColliderObject{
+			Collider: model3d.NewRect(model3d.XYZ(-20, 20, -10.0), model3d.XYZ(20, 20.1, 100.0)),
+			Material: &render3d.PhongMaterial{
+				Alpha:        100.0,
+				DiffuseColor: render3d.NewColorRGB(0.5, 0.8, 0.9).Scale(0.7),
+			},
+		},
+		// Ocean
+		&render3d.ColliderObject{
+			Collider: model3d.NewRect(model3d.XYZ(-20, 4.0, 0.0), model3d.XYZ(20, 20, 0.01)),
+			Material: &render3d.PhongMaterial{
+				Alpha:        100.0,
+				DiffuseColor: render3d.NewColorRGB(0.3, 0.9, 0.9).Scale(0.3),
+			},
+		},
+		// Beach
+		&render3d.ColliderObject{
+			Collider: model3d.NewRect(model3d.XYZ(-10, -4.0, 0.0), model3d.XYZ(10, 4, 0.01)),
+			Material: &render3d.LambertMaterial{
+				DiffuseColor: render3d.NewColorRGB(1.0, 0.85, 0.3).Scale(0.4),
+			},
+		},
+	}
 }
