@@ -19,42 +19,18 @@ const (
 )
 
 func main() {
-	sun := render3d.NewSphereAreaLight(
-		&model3d.Sphere{Center: model3d.XYZ(4, -4, 8), Radius: 2.0},
-		render3d.NewColor(60.0),
-	)
-	groundLight := render3d.NewMeshAreaLight(
-		model3d.NewMeshRect(model3d.XYZ(-5, -5, -10), model3d.XYZ(5, 5, -9.9)),
-		render3d.NewColor(2.0),
-	)
-	skyLight := render3d.NewMeshAreaLight(
-		model3d.NewMeshRect(model3d.XYZ(-10, -5, 40), model3d.XYZ(10, 50, 40.1)),
-		render3d.NewColor(12.0),
-	)
-	sideLights := render3d.JoinAreaLights(
-		render3d.NewMeshAreaLight(
-			model3d.NewMeshRect(model3d.XYZ(-5, -5, -5), model3d.XYZ(-4.9, -1, 5)),
-			render3d.NewColor(0.6),
-		),
-		render3d.NewMeshAreaLight(
-			model3d.NewMeshRect(model3d.XYZ(4.9, -5, -5), model3d.XYZ(5.0, -1, 5)),
-			render3d.NewColor(0.6),
-		),
-	)
+	lights := CreateLights()
 	heartObject := HeartObject()
 	scene := render3d.JoinedObject{
 		heartObject,
 		GroundObject(),
-		sun,
-		groundLight,
-		skyLight,
-		sideLights,
+		lights,
 	}
 
 	renderer := render3d.BidirPathTracer{
 		Camera: render3d.NewCameraAt(model3d.Coord3D{Y: -7, Z: 2},
 			model3d.Coord3D{Y: 0, Z: 2}, math.Pi/3.6),
-		Light: render3d.JoinAreaLights(sun, groundLight, skyLight, sideLights),
+		Light: lights,
 
 		MaxDepth: 15,
 		MinDepth: 3,
@@ -142,12 +118,12 @@ func HeartObject() render3d.Object {
 		},
 	}
 
-	flakes := Flakes(collider)
+	flakes := sampleFlakes(collider)
 
 	return render3d.JoinedObject{obj, flakes}
 }
 
-func Flakes(container model3d.Collider) render3d.Object {
+func sampleFlakes(container model3d.Collider) render3d.Object {
 	solid := model3d.NewColliderSolid(container)
 	mesh := model3d.NewMesh()
 	for i := 0; i < 10000; i++ {
@@ -197,4 +173,32 @@ func GroundObject() render3d.Object {
 			},
 		},
 	}
+}
+
+func CreateLights() render3d.AreaLight {
+	sun := render3d.NewSphereAreaLight(
+		&model3d.Sphere{Center: model3d.XYZ(4, -4, 8), Radius: 2.0},
+		render3d.NewColor(60.0),
+	)
+	groundLight := rectLight(model3d.XYZ(-5, -5, -9.9), model3d.XYZ(5, 5, -9.9), model3d.Z(1), 2.0)
+	skyLight := rectLight(model3d.XYZ(-10, -5, 40), model3d.XYZ(10, 50, 40), model3d.Z(-1), 12.0)
+	leftLight := rectLight(model3d.XYZ(-4.9, -5, -5), model3d.XYZ(-4.9, -1, 5), model3d.X(1), 0.6)
+	rightLight := rectLight(model3d.XYZ(4.9, -5, -5), model3d.XYZ(4.9, -1, 5), model3d.X(-1), 0.6)
+	return render3d.JoinAreaLights(sun, groundLight, skyLight, leftLight, rightLight)
+}
+
+func rectLight(min, max, normal model3d.Coord3D, brightness float64) render3d.AreaLight {
+	rect := model3d.NewMeshRect(min, max)
+	rect.Iterate(func(t *model3d.Triangle) {
+		if t.Area() < 1e-5 || t.Normal().Dot(normal) < 0.99 {
+			rect.Remove(t)
+		}
+	})
+	if len(rect.TriangleSlice()) != 2 {
+		panic("unexpected number of triangular faces")
+	}
+	return render3d.NewMeshAreaLight(
+		rect,
+		render3d.NewColor(brightness),
+	)
 }
