@@ -73,6 +73,11 @@ func main() {
 	}
 
 	for i := 0; i < stops; i++ {
+		outName := fmt.Sprintf("output%03d.png", i)
+		if _, err := os.Stat(outName); err == nil {
+			log.Println("Skipping frame for file:", outName)
+			continue
+		}
 		lastLog := time.Now().Unix() - 2
 		renderer.LogFunc = func(p, samples float64) {
 			curLog := time.Now().Unix()
@@ -85,7 +90,7 @@ func main() {
 		scene[0] = render3d.MatrixMultiply(heartObject, model3d.NewMatrix3Rotation(model3d.Z(1), angle))
 		img := render3d.NewImage(res, res)
 		renderer.Render(img, scene)
-		img.Save(fmt.Sprintf("output%03d.png", i))
+		img.Save(outName)
 	}
 }
 
