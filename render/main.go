@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"os"
@@ -11,7 +12,10 @@ import (
 	"github.com/unixpickle/model3d/render3d"
 )
 
-const ErrorMargin = 0.01
+const (
+	ErrorMargin  = 0.01
+	FinalVersion = false
+)
 
 func main() {
 	sun := render3d.NewSphereAreaLight(
@@ -24,7 +28,7 @@ func main() {
 	)
 	skyLight := render3d.NewMeshAreaLight(
 		model3d.NewMeshRect(model3d.XYZ(-10, -5, 40), model3d.XYZ(10, 50, 40.1)),
-		render3d.NewColor(10.0),
+		render3d.NewColor(12.0),
 	)
 	sideLights := render3d.JoinAreaLights(
 		render3d.NewMeshAreaLight(
@@ -36,8 +40,9 @@ func main() {
 			render3d.NewColor(0.6),
 		),
 	)
+	heartObject := HeartObject()
 	scene := render3d.JoinedObject{
-		HeartObject(),
+		heartObject,
 		GroundObject(),
 		sun,
 		groundLight,
@@ -53,8 +58,8 @@ func main() {
 		MaxDepth: 15,
 		MinDepth: 3,
 
-		NumSamples: 200,
-		MinSamples: 200,
+		NumSamples: 100,
+		MinSamples: 100,
 
 		// Gamma-aware convergence criterion.
 		Convergence: func(mean, stddev render3d.Color) bool {
@@ -85,10 +90,24 @@ func main() {
 
 	fmt.Println("Ray variance:", renderer.RayVariance(scene, 200, 200, 5))
 
-	img := render3d.NewImage(600, 600)
-	renderer.Render(img, scene)
-	fmt.Println()
-	img.Save("output.png")
+	res := 100
+	stops := 5
+	if FinalVersion {
+		res = 600
+		stops = 40
+		renderer.MinSamples = 400
+		renderer.NumSamples = 10000
+	}
+
+	for i := 0; i < stops; i++ {
+		log.Printf("Working on stop %d of %d", i+1, stops)
+		angle := math.Pi * 2 * float64(i) / float64(stops)
+		scene[0] = render3d.MatrixMultiply(heartObject, model3d.NewMatrix3Rotation(model3d.Z(1), angle))
+		img := render3d.NewImage(res, res)
+		renderer.Render(img, scene)
+		fmt.Println()
+		img.Save(fmt.Sprintf("output%03d.png", i))
+	}
 }
 
 func HeartObject() render3d.Object {
