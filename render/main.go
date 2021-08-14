@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"time"
 
 	"github.com/unixpickle/essentials"
 	"github.com/unixpickle/model3d/model3d"
@@ -82,10 +83,6 @@ func main() {
 
 		Antialias: 1.0,
 		Cutoff:    1e-4,
-
-		LogFunc: func(p, samples float64) {
-			fmt.Printf("\rRendering %.1f%%...", p*100)
-		},
 	}
 
 	fmt.Println("Ray variance:", renderer.RayVariance(scene, 200, 200, 5))
@@ -100,12 +97,18 @@ func main() {
 	}
 
 	for i := 0; i < stops; i++ {
-		log.Printf("Working on stop %d of %d", i+1, stops)
+		lastLog := time.Now().Unix() - 2
+		renderer.LogFunc = func(p, samples float64) {
+			curLog := time.Now().Unix()
+			if curLog > lastLog+1 {
+				lastLog = curLog
+				log.Printf("Rendering %.1f%% of stop %d/%d...", p*100, i+1, stops)
+			}
+		}
 		angle := math.Pi * 2 * float64(i) / float64(stops)
 		scene[0] = render3d.MatrixMultiply(heartObject, model3d.NewMatrix3Rotation(model3d.Z(1), angle))
 		img := render3d.NewImage(res, res)
 		renderer.Render(img, scene)
-		fmt.Println()
 		img.Save(fmt.Sprintf("output%03d.png", i))
 	}
 }
