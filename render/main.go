@@ -66,7 +66,7 @@ func main() {
 	res := 100
 	stops := 5
 	if FinalVersion {
-		res = 600
+		res = 300
 		stops = 40
 		renderer.MinSamples = 400
 		renderer.NumSamples = 10000
@@ -174,7 +174,7 @@ func GroundObject() render3d.Object {
 		&render3d.ColliderObject{
 			Collider: model3d.NewRect(model3d.XYZ(-10, -4.0, 0.0), model3d.XYZ(10, 4, 0.01)),
 			Material: &render3d.LambertMaterial{
-				DiffuseColor: render3d.NewColorRGB(1.0, 0.85, 0.3).Scale(0.4),
+				DiffuseColor: render3d.NewColorRGB(1.0, 0.85, 0.3).Scale(0.3),
 			},
 		},
 	}
