@@ -1,8 +1,10 @@
 package main
 
 import (
+	"compress/gzip"
 	"log"
 	"math"
+	"os"
 
 	"github.com/unixpickle/essentials"
 	"github.com/unixpickle/model3d/model2d"
@@ -50,7 +52,12 @@ func main() {
 	mesh3d := model3d.MarchingCubesSearch(solid, 0.01, 8)
 
 	log.Println("Saving mesh...")
-	mesh3d.SaveGroupedSTL("heart.stl")
+	f, err := os.Create("heart.stl.gz")
+	essentials.Must(err)
+	defer f.Close()
+	gf := gzip.NewWriter(f)
+	model3d.WriteSTL(gf, mesh3d.TriangleSlice())
+	defer gf.Close()
 
 	log.Println("Rendering mesh...")
 	render3d.SaveRandomGrid("rendering.png", mesh3d, 3, 3, 300, nil)

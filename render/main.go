@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"fmt"
 	"log"
 	"math"
@@ -95,10 +96,14 @@ func main() {
 }
 
 func HeartObject() render3d.Object {
-	f, err := os.Open("../create_mesh/heart.stl")
+	f, err := os.Open("../create_mesh/heart.stl.gz")
 	essentials.Must(err)
 	defer f.Close()
-	tris, err := model3d.ReadSTL(f)
+	gf, err := gzip.NewReader(f)
+	essentials.Must(err)
+	defer gf.Close()
+
+	tris, err := model3d.ReadSTL(gf)
 	essentials.Must(err)
 	mesh := model3d.NewMeshTriangles(tris)
 	mesh = mesh.SmoothAreas(0.05, 10)
