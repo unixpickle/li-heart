@@ -88,7 +88,7 @@ func main() {
 			}
 		}
 		angle := math.Pi * 2 * float64(i) / float64(stops)
-		scene[0] = render3d.MatrixMultiply(heartObject, model3d.NewMatrix3Rotation(model3d.Z(1), angle))
+		scene[0] = render3d.Rotate(heartObject, model3d.Z(1), angle)
 		img := render3d.NewImage(res, res)
 		renderer.Render(img, scene)
 		img.Save(outName)
